@@ -40,8 +40,9 @@ function normalizeAiText(rawResponse) {
 
 async function requestAI(messages, options = {}) {
   const preferredProvider = configuredProvider === "openai" ? "openai" : "ollama";
-  const fallbackProvider = preferredProvider === "ollama" ? "openai" : "ollama";
-  const orderedProviders = [preferredProvider, fallbackProvider].filter((provider) => provider !== "openai" || openaiApiKey);
+  const orderedProviders = preferredProvider === "openai"
+    ? ["openai"]
+    : ["ollama", ...(openaiApiKey ? ["openai"] : [])];
   let lastError = null;
 
   for (const provider of orderedProviders) {

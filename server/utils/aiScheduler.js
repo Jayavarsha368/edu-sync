@@ -11,7 +11,7 @@ const {
 } = require("./scheduler");
 
 const openaiApiKey = process.env.OPENAI_API_KEY;
-const openai = openaiApiKey ? new OpenAI({ apiKey: openaiApiKey }) : null;
+const openai = openaiApiKey ? new OpenAI({ apiKey: openaiApiKey, timeout: 60_000, maxRetries: 0 }) : null;
 const aiModel = process.env.OPENAI_CHAT_MODEL || "gpt-4o-mini";
 const configuredProvider = (process.env.AI_PROVIDER || "ollama").toLowerCase();
 

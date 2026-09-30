@@ -17,6 +17,8 @@ const allowedOrigins = [
   "http://127.0.0.1:3000",
   "http://localhost:3001",
   "http://127.0.0.1:3001",
+  ...(process.env.CLIENT_ORIGIN || "").split(",").map((origin) => origin.trim()).filter(Boolean),
+  ...(process.env.RENDER_EXTERNAL_HOSTNAME ? [`https://${process.env.RENDER_EXTERNAL_HOSTNAME}`] : []),
 ];
 
 app.use(
@@ -43,10 +45,22 @@ app.use("/api/schedule", require("./routes/scheduleRoutes"));
 app.use("/api/chat", require("./routes/chatRoutes"));
 app.use("/api/questions", require("./routes/questionRoutes"));
 
-// Health check
-app.get("/", (req, res) => {
+app.get("/health", (req, res) => {
   res.json({ status: "ok", message: "Edu-Sync API is running" });
 });
+
+if (process.env.NODE_ENV === "production") {
+  const clientBuildPath = path.resolve(__dirname, "../client/build");
+  app.use(express.static(clientBuildPath));
+  app.use((req, res, next) => {
+    if (req.method !== "GET" || req.path === "/api" || req.path.startsWith("/api/")) {
+      return next();
+    }
+    res.sendFile(path.join(clientBuildPath, "index.html"), (error) => {
+      if (error) next(error);
+    });
+  });
+}
 
 // 404 handler — unknown API routes
 app.use((req, res) => {

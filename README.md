@@ -84,6 +84,19 @@ npm run dev
 
 ---
 
+## Public Deployment (Render)
+
+The repository includes a `render.yaml` Blueprint for a single web service that serves the React app and API from one public URL.
+
+1. Create a MongoDB Atlas cluster and database user. Allow connections from Render (or configure restricted network access for your plan), and copy the Atlas connection string.
+2. In Render, choose **New > Blueprint**, connect this GitHub repository, and deploy the Blueprint.
+3. When prompted, provide `MONGO_URI` and a fresh `OPENAI_API_KEY`. Render generates `JWT_SECRET` automatically. Do not commit these values.
+4. After the deploy succeeds, open the Render service URL to use the public app.
+
+The deployed backend uses OpenAI because a cloud service cannot reach Ollama running on your personal computer. OpenAI usage is billed to the account associated with the API key. The free Render web-service plan may sleep when idle, so the first request after inactivity can take longer to start.
+
+---
+
 ## Features
 
 - **Goal Setup** — set exam name, subjects, dates, and upload your syllabus (PDF, image, or text)

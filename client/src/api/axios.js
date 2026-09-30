@@ -1,8 +1,8 @@
 import axios from "axios";
 
 const api = axios.create({
-  baseURL: "http://localhost:5000/api",
-  timeout: 370000, // Allows the local model five minutes, plus one bounded OpenAI attempt
+  baseURL: process.env.REACT_APP_API_URL || "/api",
+  timeout: Number(process.env.REACT_APP_API_TIMEOUT) || 370000,
 });
 
 // Attach the JWT token to every request
