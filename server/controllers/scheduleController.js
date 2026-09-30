@@ -1,4 +1,71 @@
 const Schedule = require("../models/Schedule");
+const Goal = require("../models/Goal");
+const QuestionSet = require("../models/QuestionSet");
+const { generateQuestions } = require("../utils/aiQuestionGenerator");
+
+const NON_STUDY_SUBJECTS = new Set(["Rest", "Rescheduled", "Buffer", "Revision"]);
+
+async function generatePracticeForCompletedTask({ schedule, goal, task }) {
+  if (!task.completed || NON_STUDY_SUBJECTS.has(task.subject)) return [];
+
+  const generatedSets = [];
+  const topicExists = await QuestionSet.exists({
+    goalId: goal._id,
+    userId: goal.userId,
+    scope: "topic",
+    subject: task.subject,
+    topic: task.topic,
+  });
+
+  if (!topicExists) {
+    const topicResult = await generateQuestions({
+      syllabus: goal.syllabusText,
+      subject: task.subject,
+      topic: task.topic,
+      scope: "topic",
+    });
+    generatedSets.push(await QuestionSet.create({
+      userId: goal.userId,
+      goalId: goal._id,
+      subject: task.subject,
+      scope: "topic",
+      topic: task.topic,
+      markType: topicResult.markType,
+      questions: topicResult.questions,
+    }));
+  }
+
+  const subjectTasks = schedule.days
+    .flatMap((day) => day.tasks)
+    .filter((item) => item.subject === task.subject);
+  const chapterComplete = subjectTasks.length > 0 && subjectTasks.every((item) => item.completed);
+  const chapterExists = await QuestionSet.exists({
+    goalId: goal._id,
+    userId: goal.userId,
+    scope: "chapter",
+    subject: task.subject,
+  });
+
+  if (chapterComplete && !chapterExists) {
+    const chapterTopics = [...new Set(subjectTasks.map((item) => item.topic))];
+    const chapterResult = await generateQuestions({
+      syllabus: goal.syllabusText,
+      subject: task.subject,
+      topic: chapterTopics,
+      scope: "chapter",
+    });
+    generatedSets.push(await QuestionSet.create({
+      userId: goal.userId,
+      goalId: goal._id,
+      subject: task.subject,
+      scope: "chapter",
+      markType: chapterResult.markType,
+      questions: chapterResult.questions,
+    }));
+  }
+
+  return generatedSets;
+}
 
 exports.getSchedule = async (req, res) => {
   try {
@@ -29,7 +96,19 @@ exports.updateTask = async (req, res) => {
     day.dayStatus = allDone ? "completed" : someDone ? "partial" : "pending";
 
     await schedule.save();
-    res.json({ message: "Task updated", schedule });
+    let generatedSets = [];
+    if (completed) {
+      const goal = await Goal.findOne({ _id: req.params.goalId, userId: req.user.id });
+      if (goal) {
+        generatePracticeForCompletedTask({ schedule, goal, task })
+          .catch((questionError) => console.error("Practice question generation failed:", questionError));
+      }
+    }
+    res.json({
+      message: completed ? "Task updated. Practice questions are generating in the background." : "Task updated",
+      schedule,
+      generatedSets,
+    });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

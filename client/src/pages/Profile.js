@@ -28,7 +28,12 @@ function Profile() {
 
   useEffect(() => {
     loadProfile();
-    api.get("/goals").then((res) => setGoal(res.data)).catch(() => {});
+    api.get("/goals").then((res) => {
+      // /goals returns an array sorted by examDate; pick the first one for display
+      if (Array.isArray(res.data) && res.data.length > 0) {
+        setGoal(res.data[0]);
+      }
+    }).catch(() => {});
   }, []);
 
   const startEditing = () => {

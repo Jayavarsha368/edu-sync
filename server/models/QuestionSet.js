@@ -11,6 +11,8 @@ const QuestionSetSchema = new mongoose.Schema(
     userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     goalId: { type: mongoose.Schema.Types.ObjectId, ref: "Goal", required: true },
     subject: { type: String, default: "All" },
+    scope: { type: String, enum: ["manual", "topic", "chapter"], default: "manual" },
+    topic: { type: String, default: "" },
     markType: { type: String, enum: ["mcq", "1", "2", "7", "14"], required: true },
     questions: [QuestionSchema],
   },

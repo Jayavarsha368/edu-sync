@@ -1,10 +1,21 @@
 const Goal = require("../models/Goal");
 const Schedule = require("../models/Schedule");
 const { generateScheduleWithAI } = require("../utils/aiScheduler");
+const { parseSyllabus, matchesSyllabusSubjects } = require("../utils/scheduler");
 
 exports.createGoal = async (req, res) => {
   try {
     const { examName, course, semester, startDate, examDate, dailyStudyHours, targetScore, subjects, syllabusText } = req.body;
+
+    const parsedSyllabus = parseSyllabus(syllabusText);
+    if (!parsedSyllabus.some(({ topics }) => topics.length > 0)) {
+      return res.status(400).json({
+        message: "Add syllabus topics using 'Subject (Weak/Medium/Strong): topic, topic' before generating a plan.",
+      });
+    }
+    if (!matchesSyllabusSubjects(subjects, parsedSyllabus)) {
+      return res.status(400).json({ message: "Add syllabus topics for every subject listed before generating a plan." });
+    }
 
     const goal = await Goal.create({
       userId: req.user.id, examName, course, semester, startDate, examDate,
@@ -23,7 +34,8 @@ exports.createGoal = async (req, res) => {
       goal, schedule,
     });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error("[createGoal]", error.message);
+    res.status(500).json({ message: error.message || "Failed to create goal" });
   }
 };
 
@@ -52,6 +64,16 @@ exports.updateGoal = async (req, res) => {
     if (!goal) return res.status(404).json({ message: "Goal not found" });
 
     const { examName, course, semester, startDate, examDate, dailyStudyHours, targetScore, subjects, syllabusText } = req.body;
+    const parsedSyllabus = parseSyllabus(syllabusText);
+    if (!parsedSyllabus.some(({ topics }) => topics.length > 0)) {
+      return res.status(400).json({
+        message: "Add syllabus topics using 'Subject (Weak/Medium/Strong): topic, topic' before generating a plan.",
+      });
+    }
+    if (!matchesSyllabusSubjects(subjects, parsedSyllabus)) {
+      return res.status(400).json({ message: "Add syllabus topics for every subject listed before generating a plan." });
+    }
+
     goal.examName = examName;
     goal.course = course;
     goal.semester = semester;

@@ -1,7 +1,61 @@
-const Groq = require("groq-sdk");
-const { parseSyllabus, weightedInterleave, distributeAcrossDays } = require("./scheduler");
+const path = require("path");
+require("dotenv").config({ path: path.resolve(__dirname, "../.env") });
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+const OpenAI = require("openai");
+const { callOllama } = require("./ollama");
+const {
+  parseSyllabus,
+  matchesSyllabusTopics,
+  weightedInterleave,
+  distributeAcrossDays,
+} = require("./scheduler");
+
+const openaiApiKey = process.env.OPENAI_API_KEY;
+const openai = openaiApiKey ? new OpenAI({ apiKey: openaiApiKey }) : null;
+const aiModel = process.env.OPENAI_CHAT_MODEL || "gpt-4o-mini";
+const configuredProvider = (process.env.AI_PROVIDER || "ollama").toLowerCase();
+
+/**
+ * Call whichever AI is configured (Ollama first if AI_PROVIDER=ollama, else OpenAI).
+ * Falls back to the other provider if the first one fails.
+ */
+async function callAI(prompt) {
+  const providerOrder = [];
+  if (configuredProvider === "ollama") providerOrder.push("ollama");
+  if (openaiApiKey) providerOrder.push("openai");
+  if (configuredProvider === "openai" && !providerOrder.includes("openai")) providerOrder.push("openai");
+
+  const orderedProviders = [...new Set(providerOrder)];
+  let lastError = null;
+
+  for (const provider of orderedProviders) {
+    try {
+      if (provider === "ollama") {
+        return await callOllama([{ role: "user", content: prompt }], { num_predict: 4096 });
+      }
+
+      // OpenAI provider
+      if (!openai) throw new Error("OpenAI API key is missing.");
+
+      const completion = await openai.chat.completions.create({
+        model: aiModel,
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0.3,
+        max_tokens: 4096,
+        response_format: { type: "json_object" },
+      });
+
+      const content = completion.choices?.[0]?.message?.content;
+      if (content && content.trim()) return content;
+      throw new Error("OpenAI returned an empty response.");
+    } catch (error) {
+      console.log(`AI provider "${provider}" failed for schedule generation: ${error.message}`);
+      lastError = error;
+    }
+  }
+
+  throw lastError || new Error("No AI provider is available right now.");
+}
 
 async function generateScheduleWithAI({ startDate, examDate, dailyStudyHours, syllabusText, examName }) {
   const parsed = parseSyllabus(syllabusText);
@@ -9,6 +63,11 @@ async function generateScheduleWithAI({ startDate, examDate, dailyStudyHours, sy
 
   let orderedTopics = fallbackOrder;
   let generatedBy = "fallback";
+
+  if (parsed.length === 0 || parsed.every((s) => s.topics.length === 0)) {
+    console.log("Syllabus is empty — using fallback schedule.");
+    return { days: distributeAcrossDays({ startDate, examDate, orderedTopics }), generatedBy };
+  }
 
   try {
     const prompt = `You are a study planning assistant helping with: "${examName}".
@@ -29,39 +88,21 @@ Return ONLY valid JSON, no explanation, in exactly this shape — include EVERY 
   ]
 }`;
 
-    const completion = await groq.chat.completions.create({
-      model: "llama-3.3-70b-versatile",
-      messages: [{ role: "user", content: prompt }],
-      temperature: 0.3,
-      max_tokens: 4096,
-      response_format: { type: "json_object" },
-    });
+    const raw = await callAI(prompt);
+    const cleaned = raw.replace(/^```(?:json)?\s*|\s*```$/gi, "").trim();
+    const parsedResponse = JSON.parse(cleaned);
 
-    const raw = completion.choices[0].message.content;
-    const parsedResponse = JSON.parse(raw);
-
-    const totalExpectedTopics = parsed.reduce((sum, s) => sum + s.topics.length, 0);
-
-    if (
-      Array.isArray(parsedResponse.orderedTopics) &&
-      parsedResponse.orderedTopics.length >= totalExpectedTopics
-    ) {
-      orderedTopics = parsedResponse.orderedTopics.map((t) => ({
-        subject: t.subject || "General",
-        topic: t.topic || "Review",
-      }));
+    if (matchesSyllabusTopics(parsedResponse.orderedTopics, parsed)) {
+      orderedTopics = parsedResponse.orderedTopics;
       generatedBy = "ai";
     } else {
-      console.log(
-        `AI returned ${parsedResponse.orderedTopics?.length || 0} topics, expected ${totalExpectedTopics}. Using rule-based order instead.`
-      );
+      console.log("AI topic order did not exactly match the syllabus. Using rule-based order instead.");
     }
   } catch (error) {
     console.log("AI ordering failed, using rule-based fallback:", error.message);
   }
 
   const days = distributeAcrossDays({ startDate, examDate, orderedTopics });
-
   return { days, generatedBy };
 }
 

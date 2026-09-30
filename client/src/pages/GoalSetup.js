@@ -111,7 +111,12 @@ function GoalSetup() {
     try {
       const payload = {
         ...formData,
-        subjects: formData.subjects.split(",").map((s) => s.trim()).filter(Boolean),
+        subjects: formData.subjects
+          .split(/[\n,]/)
+          .map((subject) => subject.trim())
+          .filter((subject, index, subjects) =>
+            subject && subjects.findIndex((candidate) => candidate.toLowerCase() === subject.toLowerCase()) === index
+          ),
       };
 
       if (editId) {
@@ -124,7 +129,7 @@ function GoalSetup() {
         setTimeout(() => navigate(`/studyplan/${res.data.goal._id}`), 1200);
       }
     } catch (err) {
-      setMessage("Failed to save goal.");
+      setMessage(err.response?.data?.message || "Failed to save goal. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -210,10 +215,13 @@ function GoalSetup() {
           <div className="es-field">
             <div className="es-field-label-row">
               <span className="es-icon-chip es-icon-chip--teal" style={{ width: 24, height: 24, fontSize: 12 }}>📖</span>
-              <label className="es-label" style={{ margin: 0 }}>Subjects (comma separated)</label>
+              <label className="es-label" style={{ margin: 0 }}>Subjects (comma or line separated)</label>
             </div>
-            <input name="subjects" className="es-input" placeholder="DSA, DBMS, OS, Java"
+            <textarea name="subjects" className="es-input" rows={2} placeholder="DSA, DBMS, OS, Java"
               value={formData.subjects} onChange={handleChange} />
+            <p className="es-muted" style={{ fontSize: 12, marginTop: 4 }}>
+              Add syllabus topics for every subject below so each one is included in your study plan.
+            </p>
           </div>
 
           <div className="es-field">

@@ -1,5 +1,5 @@
-function parseSyllabus(syllabusText) {
-  return syllabusText
+function parseSyllabus(syllabusText = "") {
+  return (typeof syllabusText === "string" ? syllabusText : "")
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean)
@@ -22,6 +22,51 @@ function parseSyllabus(syllabusText) {
 
       return { subject, level, topics };
     });
+}
+
+function syllabusForSubject(syllabusText = "", requestedSubject = "All") {
+  const text = typeof syllabusText === "string" ? syllabusText.trim() : "";
+  const subject = typeof requestedSubject === "string" ? requestedSubject.trim() : "";
+  if (!subject || subject.toLowerCase() === "all") return text;
+
+  return parseSyllabus(text)
+    .filter((entry) => entry.subject.trim().toLowerCase() === subject.toLowerCase() && entry.topics.length > 0)
+    .map((entry) => `${entry.subject} (${entry.level}): ${entry.topics.join(", ")}`)
+    .join("\n");
+}
+
+function matchesSyllabusSubjects(subjects, parsedSyllabus) {
+  if (!Array.isArray(subjects) || subjects.length === 0) return true;
+
+  return subjects.every((subject) =>
+    typeof subject === "string" && parsedSyllabus.some((entry) =>
+      entry.topics.length > 0 && entry.subject.trim().toLowerCase() === subject.trim().toLowerCase()
+    )
+  );
+}
+
+function matchesSyllabusTopics(orderedTopics, parsedSyllabus) {
+  const expected = new Map();
+
+  parsedSyllabus.forEach(({ subject, topics }) => {
+    topics.forEach((topic) => {
+      const key = JSON.stringify([subject.trim().toLowerCase(), topic.trim().toLowerCase()]);
+      expected.set(key, (expected.get(key) || 0) + 1);
+    });
+  });
+
+  const expectedCount = [...expected.values()].reduce((sum, count) => sum + count, 0);
+  if (!Array.isArray(orderedTopics) || orderedTopics.length !== expectedCount) return false;
+
+  for (const item of orderedTopics) {
+    if (typeof item?.subject !== "string" || typeof item?.topic !== "string") return false;
+    const key = JSON.stringify([item.subject.trim().toLowerCase(), item.topic.trim().toLowerCase()]);
+    const count = expected.get(key) || 0;
+    if (count === 0) return false;
+    expected.set(key, count - 1);
+  }
+
+  return [...expected.values()].every((count) => count === 0);
 }
 
 function weightFor(level) {
@@ -131,4 +176,12 @@ function generateSchedule({ startDate, examDate, dailyStudyHours, syllabusText }
   return distributeAcrossDays({ startDate, examDate, orderedTopics });
 }
 
-module.exports = { parseSyllabus, weightedInterleave, distributeAcrossDays, generateSchedule };
+module.exports = {
+  parseSyllabus,
+  syllabusForSubject,
+  matchesSyllabusSubjects,
+  matchesSyllabusTopics,
+  weightedInterleave,
+  distributeAcrossDays,
+  generateSchedule,
+};

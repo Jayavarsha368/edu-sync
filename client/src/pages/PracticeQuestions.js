@@ -41,7 +41,10 @@ function PracticeQuestions() {
       setActiveSet(res.data.questionSet);
       loadPastSets();
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to generate questions.");
+      const timedOut = err.code === "ECONNABORTED" || err.code === "ETIMEDOUT";
+      setError(err.response?.data?.message || (timedOut
+        ? "Question generation took too long. Check that Ollama is running and the configured model is available, then try again."
+        : "Failed to generate questions."));
     } finally {
       setGenerating(false);
     }

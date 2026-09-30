@@ -15,6 +15,7 @@ function StudyPlan() {
   const [deletingSubject, setDeletingSubject] = useState(null);
   const [confirmDay, setConfirmDay] = useState(null);
   const [completingDayId, setCompletingDayId] = useState(null);
+  const [practiceNotice, setPracticeNotice] = useState("");
 
   const loadSchedule = () => {
     setLoading(true);
@@ -30,6 +31,15 @@ function StudyPlan() {
   const toggleTask = async (dayId, taskId, completed) => {
     const res = await api.patch(`/schedule/${goalId}/task`, { dayId, taskId, completed });
     setSchedule(res.data.schedule);
+    if (res.data.generatedSets?.length) {
+      const hasChapterTest = res.data.generatedSets.some((set) => set.scope === "chapter");
+      setPracticeNotice(
+        hasChapterTest
+          ? "Topic practice and the complete chapter test are ready in Practice Questions."
+          : "Topic practice questions are ready in Practice Questions."
+      );
+      setTimeout(() => setPracticeNotice(""), 5000);
+    }
   };
 
   const handleReallocate = async (dayId) => {
@@ -220,6 +230,12 @@ function StudyPlan() {
       <h1 className="es-gradient-title" style={{ fontSize: 28, marginBottom: 28 }}>
         {selectedSubject === "All" ? "All subjects" : displayNameFor(selectedSubject)}
       </h1>
+
+      {practiceNotice && (
+        <div className="es-alert es-alert--info" style={{ marginBottom: 20 }}>
+          {practiceNotice} <button onClick={() => navigate(`/practice/${goalId}`)} style={{ marginLeft: 8 }}>Open practice</button>
+        </div>
+      )}
 
       {visibleDays.length === 0 && (
         <div className="es-card"><p className="es-muted">No tasks for this subject.</p></div>
